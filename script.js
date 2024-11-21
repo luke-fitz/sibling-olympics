@@ -1,17 +1,4 @@
-// Fetch the event data
-fetch('./data/events.json')
-  .then(response => response.json())
-  .then(data => {
-    const events = data.events;
-    populateNavbar(events);
-    clickFirstEvent();
-  })
-  .catch(error => {
-    console.error('Error fetching data:', error);
-    document.getElementById('arena').textContent = 'Failed to load event data. Please try again later.';
- });
-
-// Precomputed styles
+/// Precomputed styles
 const mediaQuery = window.matchMedia("screen and (max-width: 768px)");
 const isMobile = mediaQuery.matches;
 const style = getComputedStyle(document.documentElement);
@@ -24,14 +11,52 @@ const minLaneHeight = parseInt(
   : style.getPropertyValue('--lane-min-height-desktop')
 );
 
+// Listener for dropdown button clicks
+document.querySelector('.dropdown-btn').addEventListener('click', function () {
+  // Close the menu if it is open, and vice versa
+  const dropdownMenu = document.querySelector('.dropdown-menu');
+  dropdownMenu.style.display = dropdownMenu.style.display === 'block' ? 'none' : 'block';
+});
+
+// Fetch the event data
+fetch('./data/events.json')
+  .then(response => response.json())
+  .then(data => {
+    const events = data.events;
+    populateAllEventSelectors(events);
+    clickFirstEvent();
+  })
+  .catch(error => {
+    console.error('Error fetching data:', error);
+    document.getElementById('arena').textContent = 'Failed to load event data. Please try again later.';
+ });
+
+ function handleEventClick(event, updateDropdown) {
+  // Update the button text to the selected option
+  document.querySelector('.dropdown-btn').textContent = event.event;
+
+  // Close the dropdown after selection
+  document.querySelector('.dropdown-menu').style.display = 'none';
+
+  // Simulate the event
+  simulateEvent(event);
+}
+
 /**
- * Populates the navigation menus with the event labels
+ * Populates a navigation menu with the event labels
  * @param {list} events - List of events in json format
+ * @param {string} eventSelectorId - ID of the event selector element
+ * @param {string} eventHeadingClass - Class of the event heading element
+ * @param {string} eventClass - Class of the event label element
+ * @returns 
  */
-function populateNavbar(events) {
-  const navPanel = document.getElementById('nav-panel');
-  const navSelector = document.getElementById('nav-selector');
-  let lastSport = ''; // initialize
+function populateEventSelector(events, eventSelectorId, eventHeadingClass, eventClass) {
+
+  // Get the event selector element
+  const eventSelector = document.getElementById(eventSelectorId);
+
+  // Initialise last sport for the heading calculation
+  let lastSport = ''; 
 
   events.forEach(event => {
     // Get the event's sport
@@ -39,47 +64,45 @@ function populateNavbar(events) {
 
     // Add a sport subheading if it is different to the previous value
     if (eventSport != lastSport) {
-      // Navigation panel
-      const sportHeading = document.createElement('div');
-      sportHeading.className = 'nav-heading';
-      sportHeading.textContent = eventSport;
-      navPanel.appendChild(sportHeading);
-
-      // Navigation selector
-      const sportOptGroup = document.createElement('optgroup');
-      sportOptGroup.label = eventSport;
-      navSelector.appendChild(sportOptGroup);
+      const eventHeading = document.createElement('div');
+      eventHeading.className = eventHeadingClass;
+      eventHeading.textContent = eventSport;
+      eventSelector.appendChild(eventHeading);
 
       // Update the latest sport
       lastSport = eventSport;
     }
 
-    // Add the event button
-    // Navigation panel
-    const eventButton = document.createElement('div');
-    eventButton.textContent = event.event;
-    eventButton.className = 'nav-item';
-    eventButton.onclick = () => simulateEvent(event);
-    navPanel.appendChild(eventButton);
-
-    // Navigation selector
-    const selectOption = document.createElement('option');
-    selectOption.value = event.event;
-    selectOption.textContent = event.event;
-    selectOption.className = 'select.item';
-    selectOption.onclick = () => simulateEvent(event);
-    navSelector.append(selectOption);
-    
-
+    // Add event to the selector
+    const eventItem = document.createElement('div');
+    eventItem.className = eventClass;
+    eventItem.textContent = event.event;
+    eventItem.value = event.event;
+    eventItem.onclick = () => handleEventClick(event);
+    eventSelector.appendChild(eventItem);
   });
 }
 
 /**
+ * Populates all navigation menus with the event labels
+ * @param {list} events - List of events in json format
+ * @returns 
+ */
+function populateAllEventSelectors(events) {
+  // Desktop
+  populateEventSelector(events, 'nav-panel', 'nav-heading', 'nav-item', false);
+  // Mobile
+  populateEventSelector(events, 'dropdown-menu', 'dropdown-heading', 'dropdown-item', true);
+}
+
+/**
  * Loads the first event by clicking its label
+ * @returns
  */
 function clickFirstEvent() {
-  const firstEventLabel = document.querySelector('.nav-item');
-  firstEventLabel.click()
+  const eventItemElement = isMobile ? '.dropdown-item' : '.nav-item';
+  const firstEventLabel = document.querySelector(eventItemElement);
+  firstEventLabel.click();
 }
 
 /**
@@ -104,7 +127,7 @@ function setArenaElement(event, arenaHeight) {
 function setLaneElement(result, laneHeightPercent) {
   const lane = document.createElement('div');
   lane.className = 'lane';
-  lane.id = `lane-${result.lane}`
+  lane.id = `lane-${result.lane}`;
   lane.style.height = laneHeightPercent + '%';
   return lane;
 }
@@ -131,7 +154,7 @@ function setDotElement(result) {
   const dot = document.createElement('div');
   dot.className = 'dot';
   dot.id = `dot-${result.lane}`;
-  return dot
+  return dot;
 }
 
 /**
@@ -144,7 +167,7 @@ function setTotalTimeLabelElement(result) {
   totalTimeLabel.className = 'total-time-label';
   totalTimeLabel.id = `total-time-label-${result.lane}`;
   totalTimeLabel.textContent = '';  // Initially blank
-  return totalTimeLabel
+  return totalTimeLabel;
 }
 
 /**
@@ -253,7 +276,6 @@ function populateArena(event) {
 
   // Update positions based on finishing end and longest lane label
   setDynamicPositions(event);
-
 }
 
 /**
@@ -306,8 +328,15 @@ function determinePlacings(results) {
     return results;
 }
 
+/**
+ * Adds a medal to a total time label if applicable
+ * @param {HTMLDivElement} totalTimeLabel - HTML element of the athlete's total time label
+ * @param {number} placing - Ordinal placing of the athlete 
+ * @param {number} totalLaps - Total number of laps in the event
+ * @returns
+ */
 function addMedalIfWon(totalTimeLabel, placing, totalLaps) {
-  // Define the medal abbrevations for each placing
+  // Define the medal abbrevations for each placing. Note that this defines which medals are available.
   const placingAbbrevs = {
     1: 'G',
     2: 'S',
@@ -387,6 +416,7 @@ function formatTime(timeInSeconds) {
  * @param {object} result - Dictionary with details of the lane's result
  * @param {number} totalLaps - Total number of laps in the race
  * @param {number} playbackSpeedFactor - Playback speed factor. 1 is real time; higher values are faster. 
+ * @returns
  */
 function animateDot(result, totalLaps, playbackSpeedFactor) {
   // Initialise counter
@@ -434,7 +464,8 @@ function animateDot(result, totalLaps, playbackSpeedFactor) {
 /**
  * Animates all dots along their lanes for the whole event
  * @param {object} event - Dictionary containing event details 
- * @param {number} playbackSpeedFactor - Playback speed factor. 1 is real time; higher values are faster. 
+ * @param {number} playbackSpeedFactor - Playback speed factor. 1 is real time; higher values are faster.
+ * @returns
  */
 function animateAllDots(event, playbackSpeedFactor) {
   // Total number of laps
@@ -448,7 +479,8 @@ function animateAllDots(event, playbackSpeedFactor) {
 
 /**
  * Simulates an event by moving each dot along the arena
- * @param {object} event - Dictionary containing event details 
+ * @param {object} event - Dictionary containing event details
+ * @returns
  */
 function simulateEvent(event) {
   // Set the playback speed factor
